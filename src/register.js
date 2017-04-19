@@ -61,20 +61,6 @@ module.exports = function(webhooksClient, options) {
     }
   }
 
-  function registerWebhook(hookDef) {
-    logger(hookDef.name + ': Registering Webhook');
-    webhooksClient.register({
-      url: url + hookDef.path,
-      events: hookDef.events,
-      secret: secret,
-      config: {
-        name: hookDef.name,
-      },
-    }, function(err, res) {
-       if (err) console.error(hookDef.name + ': ' + err);
-    });
-  }
-
   function getWebhook(hookDef) {
     return currentHooks.filter(function (webhook) {
       return webhook.config && webhook.config.name === hookDef.name && webhook.target_url === url + hookDef.path;
@@ -86,7 +72,6 @@ module.exports = function(webhooksClient, options) {
     var webhook = getWebhook(hookDef);
 
     // Verify the webhook is active or register a new webhook
-    if (webhook) verifyWebhook(hookDef, webhook);
-    else registerWebhook(hookDef);
+    verifyWebhook(hookDef, webhook);
   }
 };

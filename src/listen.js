@@ -49,7 +49,6 @@
 var ms = require('ms');
 var crypto = require('crypto');
 var kue = require('kue');
-var queue = kue.createQueue();
 var jsonParser = require('body-parser').json({type: 'application/vnd.layer.webhooks+json'});
 var Debug = require('debug');
 
@@ -68,7 +67,8 @@ module.exports = function(options) {
     var loggerError = Debug('layer-webhooks-services-error:' + webhookName.replace(/\s/g,'-'));
     var path = hookDef.path;
     if (path.indexOf('/') !== 0) path = '/' + path;
-    var delay = hookDef.delay ? ms(hookDef.delay) : 0;
+
+    console.log('path: ' + path);
 
     /**
      * Listen for verifcation requests. These requests are sent by Layer Services when
@@ -92,20 +92,7 @@ module.exports = function(options) {
       // Only respond to conversation events or to messages NOT sent via Platform API.
       // Responding to bots could create an infinite bot loop
       if (!req.body.message || req.body.message.sender.user_id) {
-        queue.createJob(webhookName, {
-          title: webhookName,
-          timestamp: req.body.event.created_at,
-          type: req.body.event.type,
-          conversation: req.body.conversation,
-          message: req.body.message
-        }).delay(delay).attempts(10).backoff({
-          type: 'exponential',
-          delay: 10000
-        }).save( function(err){
-           if( err ) {
-            console.error('Unable to create Kue process: ', err );
-          }
-        });
+
       }
 
       res.sendStatus(200);
@@ -118,12 +105,21 @@ module.exports = function(options) {
      * provided when registering the webhook with the 'layer-webhook-signature' header.
      */
     function handleValidation(req, res, next) {
+      console.log(req.body);
+      console.log('\n');
       var payload = JSON.stringify(req.body);
+      console.log(payload);
+      console.log('\n');
       var nodeVersion = Number(process.version.replace(/^v/, '').split(/\./)[0]);
 
       var utf8safe = nodeVersion >= 6 ? payload : unescape(encodeURIComponent(payload));
+      console.log(utf8safe);
+      console.log('\n');
       var hash = crypto.createHmac('sha1', secret).update(utf8safe).digest('hex');
+      console.log(hash);
+      console.log('\n');
       var signature = req.get('layer-webhook-signature');
+      console.log(signature);
 
       if (hash === signature) next();
       else {

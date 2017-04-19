@@ -60,11 +60,9 @@
 
 var ms = require('ms');
 var listen = require('./listen');
-var queue = require('kue').createQueue();
 var Debug = require('debug');
-var REDIS_PREFIX = 'layer-webhooks-';
 
-module.exports = function(layerClient, redis, options) {
+module.exports = function(layerClient, options) {
 
   var originalHooks = options.hooks;
   options.hooks = options.hooks.map(function(hook) {
@@ -89,58 +87,12 @@ module.exports = function(layerClient, redis, options) {
     /**
      * Process each webhook event
      */
-    queue.process(hook.name, 50, function(job, done) {
-      try {
-        var event = job.data;
-        var message = event.message;
-        if (message.sender.name) return done();
-        switch (event.type) {
-          // Store the new message data and schedule a job to check the delivery status in 15 minutes
-          case 'message.sent':
-              redis.set(REDIS_PREFIX + hook.name + '-' +  message.id, JSON.stringify(message));
-              queue.createJob(hook.name + ' delayed-job', {
-                title: 'Process undelivered message',
-                messageId: message.id
-              }).delay(hook.receipts.delay).attempts(10).backoff( {type:'exponential', delay: 1000} )
-              .save(function(err) {
-                if (err) console.error(new Date().toLocaleString() + ': ' + hook.name + ': Unable to create Kue process: ', err );
-              });
-              break;
 
-          // Update the message data
-          case 'message.delivered':
-          case 'message.read':
-            redis.set(REDIS_PREFIX + hook.name + '-' + message.id, JSON.stringify(message));
-            break;
-
-          // Delete the Message data; redis.get will fail for this item.
-          case 'message.deleted':
-            redis.del(REDIS_PREFIX + hook.name + '-' + message.id);
-            break;
-        }
-      } finally {
-        done();
-      }
-    });
 
     /**
      * For each undelivered message retrieve the message from redis, and if not yet deleted,
      * process the message.
      */
-    queue.process(hook.name + ' delayed-job', function(job, done) {
-      var messageId = job.data.messageId;
-      logger('Processing ' + messageId);
-      redis.get(REDIS_PREFIX + hook.name + '-' +  messageId, function (err, reply) {
-        try {
-          if (reply) {
-            processMessage(JSON.parse(reply));
-            redis.del(REDIS_PREFIX + hook.name + '-' + messageId);
-          }
-        } finally {
-          done();
-        }
-      });
-    });
 
     function getUserFromIdentities(userId, callback) {
       layerClient.identities.get(userId, function(err, response) {
@@ -181,14 +133,7 @@ module.exports = function(layerClient, redis, options) {
     }
 
     function createJob(message, recipients, identities) {
-      queue.createJob(hook.originalName, {
-        message: message,
-        recipients: recipients,
-        identities: identities
-      }).attempts(10).backoff( {type:'exponential', delay: 1000} )
-      .save(function(err) {
-        if (err) console.error(new Date().toLocaleString() + ': ' + hook.name + ': Unable to create Kue process: ', err );
-      });
+      
     }
   });
 };

@@ -15,6 +15,6 @@ module.exports = function(config) {
     var layerClient = new LayerClient(config);
 
     this.listen = require('./listen');
-    this.receipts = require('./receipts').bind(null, layerClient, config.redis);
+    this.receipts = require('./receipts').bind(null, layerClient);
     this.register = require('./register').bind(null, webhooksClient);
 };
